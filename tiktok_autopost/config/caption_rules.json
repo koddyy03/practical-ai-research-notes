@@ -1,0 +1,65 @@
+{
+  "comment": "Can I Silk Your Hair? シリーズのキャプション規則。コードを触らずにここを編集して更新する。",
+
+  "fixed_hashtags": [
+    "#cansilkyourhair",
+    "#hairoil",
+    "#hairtransformation",
+    "#silktherich"
+  ],
+
+  "search_terms": [
+    "hair oil",
+    "frizzy hair",
+    "hair before after",
+    "hair transformation"
+  ],
+
+  "banned_words": [
+    "works great",
+    "virgin hair",
+    "bleached hair",
+    "repair",
+    "heat protectant",
+    "nourish",
+    "hydrate",
+    "formula",
+    "ingredient",
+    "japanese beauty",
+    "link in bio",
+    "dm me",
+    "shop now",
+    "available now",
+    "use code",
+    "sale"
+  ],
+
+  "banned_hashtags": [
+    "#fyp",
+    "#foryou",
+    "#foryoupage",
+    "#viral",
+    "#trending",
+    "#japanesebeauty"
+  ],
+
+  "first_comment_banned_terms": [
+    "silk the rich",
+    "silktherich",
+    "hair oil",
+    "buy",
+    "purchase",
+    "order",
+    "shop",
+    "link",
+    "bio",
+    "discount",
+    "code",
+    "http",
+    "www."
+  ],
+
+  "max_caption_chars": 60,
+  "max_total_hashtags": 5,
+  "max_consecutive_uppercase": 2
+}
