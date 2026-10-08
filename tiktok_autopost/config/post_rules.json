@@ -1,0 +1,21 @@
+{
+  "_comment": "動画ゲートとAPI設定。コードを触らずにここだけ更新できる。",
+
+  "require_portrait": true,
+  "min_side_px": 360,
+  "min_duration_sec": 3,
+  "max_duration_sec": 600,
+  "min_fps": 23,
+  "max_fps": 60,
+  "max_file_bytes": 1073741824,
+
+  "privacy_level": "PUBLIC_TO_EVERYONE",
+  "disable_comment": false,
+  "disable_duet": false,
+  "disable_stitch": false,
+  "video_cover_timestamp_ms": 1000,
+  "is_aigc": false,
+
+  "status_poll_interval_sec": 10,
+  "status_poll_max_attempts": 30
+}
