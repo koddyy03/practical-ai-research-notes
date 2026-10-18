@@ -21,10 +21,12 @@ company Google Drive. This application moves an approved clip from that
 Drive folder to our own TikTok account on a fixed weekly schedule, so that
 our small team does not have to publish each clip by hand.
 
-The application serves exactly one TikTok account: the account owned by our
-company and operated by our founder. It is not a product offered to other
-users, it does not accept sign-ups, and it never posts on behalf of anyone
-outside our company.
+The application serves exactly one TikTok account: our founder's own
+account, which he uses to publish this series for the brand. It is not a
+product offered to other users, it does not accept sign-ups, and it never
+posts on behalf of anyone else. The account holder is the person who
+authorizes the application, so the app only ever posts to the account of
+the person who granted it access.
 ```
 
 ## Which scopes do you need, and why?
