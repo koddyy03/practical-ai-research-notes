@@ -98,14 +98,27 @@ PUBLIC_TO_EVERYONE and is otherwise identical.
 
 ## 必要な公開ページ（審査で確認される）
 
-| 項目 | URL | 状態 |
+| 項目 | URL | 状態 (2026-10-19 実測) |
 |------|-----|------|
-| Terms of Service | `https://silktherich.com/terms` | <要確認> |
-| Privacy Policy | `https://silktherich.com/privacy` | <要確認> |
-| Redirect URI | `https://silktherich.com/tiktok-callback` | <要作成> |
+| Terms of Service | `https://us.silktherich.com/policies/terms-of-service` | ✅ 200 |
+| Privacy Policy | `https://us.silktherich.com/policies/privacy-policy` | ✅ 200 |
+| Redirect URI | `https://us.silktherich.com/pages/tiktok-callback` | ❌ 未作成 |
 
-この3つが実在して開けないと審査で落ちる。Shopify のストアに
-ページが無ければ先に作る必要がある。
+`silktherich.com` (us. なし) は別サイトで、`/terms` `/privacy` `/policies/*`
+すべて 404。審査には **`us.silktherich.com` 側の URL を出すこと**。
+
+Redirect URI 用のページだけ未作成。Shopify で空のページを 1 枚作る。
+
+## 開発者アカウントについて
+
+アプリを登録した開発者アカウントは、投稿先の個人アカウントとは別。
+審査でレビュアーが疑問を持たないよう、申請文に一文添えておく:
+
+```
+Note: the developer account that registered this application and the TikTok
+account the application posts to are different logins. The application posts
+only to the account that authorized it, which is our founder's own account.
+```
 
 ## 審査でよく落ちる点
 
