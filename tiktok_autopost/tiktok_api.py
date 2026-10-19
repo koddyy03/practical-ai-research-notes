@@ -130,6 +130,30 @@ def parse_token_file(raw: dict) -> TokenState:
     )
 
 
+def load_credentials(raw: dict | None = None) -> tuple[str, str]:
+    """client_key / client_secret を取り出す。ファイル優先、無ければ環境変数。
+
+    実行環境の環境変数欄は「この環境を使う全員に見える」平文なので、
+    認証情報はそこに置けない。代わりに Google ドライブ上の private な
+    JSON に入れ、実行のたびに取ってくる運用にする。
+    環境変数は、秘密でない値 (client_key 等) を置く場合のフォールバック。
+    """
+    raw = raw or {}
+    key = str(_first(raw, ("client_key", "clientKey"), "")) or os.environ.get(
+        "TIKTOK_CLIENT_KEY", ""
+    ).strip()
+    secret = str(_first(raw, ("client_secret", "clientSecret"), "")) or os.environ.get(
+        "TIKTOK_CLIENT_SECRET", ""
+    ).strip()
+    missing = [n for n, v in (("client_key", key), ("client_secret", secret)) if not v]
+    if missing:
+        raise TikTokAPIError(
+            f"{', '.join(missing)} が見つからない。"
+            "認証情報ファイル (--token-state) か環境変数で渡すこと。"
+        )
+    return key, secret
+
+
 class TokenStore:
     """JSON ファイル 1 枚でトークンを持ち回す。
 
@@ -153,13 +177,28 @@ class TokenStore:
             return TokenState()
         with open(self.path, encoding="utf-8") as fh:
             raw = json.load(fh)
+        self._raw = raw
         return parse_token_file(raw)
 
+    def raw(self) -> dict:
+        """ファイルの生の中身。client_key/client_secret を読むのに使う。"""
+        if not self.path.exists():
+            return {}
+        with open(self.path, encoding="utf-8") as fh:
+            return json.load(fh)
+
     def save(self, state: TokenState) -> None:
+        """トークンを書き戻す。同じファイルにある他のキーは保持する。
+
+        client_key / client_secret を同居させる運用なので、
+        トークン更新でそれらを消してしまわないようにする。
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        merged = dict(self.raw())
+        merged.update(state.as_dict())
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(state.as_dict(), fh, indent=2)
+            json.dump(merged, fh, indent=2)
         tmp.replace(self.path)
         logger.info("token state saved: %s", self.path)
 

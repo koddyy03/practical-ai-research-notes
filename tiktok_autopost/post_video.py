@@ -73,15 +73,9 @@ def publish(
     token_state_path: Path,
     rules: dict,
 ) -> dict:
-    client_key = os.environ.get("TIKTOK_CLIENT_KEY", "").strip()
-    client_secret = os.environ.get("TIKTOK_CLIENT_SECRET", "").strip()
-    if not client_key or not client_secret:
-        raise tiktok_api.TikTokAPIError(
-            "TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET が未設定"
-        )
-
     store = tiktok_api.TokenStore(token_state_path)
     state = store.load()
+    client_key, client_secret = tiktok_api.load_credentials(store.raw())
 
     # アクセストークンは 24h で切れる。毎回更新してリフレッシュトークンを保存し直す。
     if not state.access_token_valid:

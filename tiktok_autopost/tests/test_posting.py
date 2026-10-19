@@ -337,6 +337,75 @@ def test_absolute_expiry_is_honoured():
     assert state.access_token_valid
 
 
+# ---------------------------------------------------------------- 認証情報の置き場所
+
+def test_credentials_read_from_file():
+    """環境変数欄は全員に見えるので、認証情報はファイル側から読めること。"""
+    key, secret = tiktok_api.load_credentials(
+        {"client_key": "ck-file", "client_secret": "cs-file", "refresh_token": "rt"}
+    )
+    assert (key, secret) == ("ck-file", "cs-file")
+
+
+def test_credentials_file_wins_over_env():
+    import os
+    os.environ["TIKTOK_CLIENT_KEY"] = "ck-env"
+    os.environ["TIKTOK_CLIENT_SECRET"] = "cs-env"
+    try:
+        key, secret = tiktok_api.load_credentials(
+            {"client_key": "ck-file", "client_secret": "cs-file"}
+        )
+        assert (key, secret) == ("ck-file", "cs-file")
+    finally:
+        del os.environ["TIKTOK_CLIENT_KEY"], os.environ["TIKTOK_CLIENT_SECRET"]
+
+
+def test_credentials_fall_back_to_env():
+    import os
+    os.environ["TIKTOK_CLIENT_KEY"] = "ck-env"
+    os.environ["TIKTOK_CLIENT_SECRET"] = "cs-env"
+    try:
+        assert tiktok_api.load_credentials({}) == ("ck-env", "cs-env")
+    finally:
+        del os.environ["TIKTOK_CLIENT_KEY"], os.environ["TIKTOK_CLIENT_SECRET"]
+
+
+def test_missing_credentials_name_what_is_missing():
+    import os
+    for v in ("TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"):
+        os.environ.pop(v, None)
+    try:
+        tiktok_api.load_credentials({"client_key": "ck"})
+    except tiktok_api.TikTokAPIError as exc:
+        assert "client_secret" in str(exc)
+        assert "client_key" not in str(exc), "揃っている方を欠落として報告しない"
+        return
+    raise AssertionError("client_secret が無ければ例外にすべき")
+
+
+def test_save_keeps_credentials_in_the_same_file():
+    """トークン更新で client_secret を消してしまわないこと。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "creds.json"
+        path.write_text(json.dumps({
+            "client_key": "ck", "client_secret": "cs", "refresh_token": "rt-old",
+        }), encoding="utf-8")
+        store = tiktok_api.TokenStore(path)
+        assert store.load().refresh_token == "rt-old"
+
+        # ローテーション後を書き戻す
+        store.save(tiktok_api.TokenState(
+            access_token="at", refresh_token="rt-new",
+            access_expires_at=time.time() + 3600,
+        ))
+
+        after = json.loads(path.read_text(encoding="utf-8"))
+        assert after["refresh_token"] == "rt-new"
+        assert after["client_key"] == "ck", "認証情報が消えている"
+        assert after["client_secret"] == "cs", "認証情報が消えている"
+        assert tiktok_api.load_credentials(store.raw()) == ("ck", "cs")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
