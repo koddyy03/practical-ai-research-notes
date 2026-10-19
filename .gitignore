@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Claude Code local settings (may contain webhook URLs / tokens)
+.claude/settings.local.json
