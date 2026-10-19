@@ -375,7 +375,12 @@ def plan_chunks(video_size: int) -> ChunkPlan:
         # 64MB 以下は 1 チャンク (5MB 未満もここ)
         chunk_size = video_size
     else:
-        chunk_size = MAX_CHUNK_BYTES
+        # 64MB 上限に収まる「最小の個数」に均等割りする。
+        # chunk_size を 64MB 固定にすると、例えば 127MB が
+        # floor(127/64)=1 チャンクと宣言され、実際には 127MB 送ることになり
+        # TikTok に invalid_params ("The chunk size is invalid") で弾かれる。
+        count = -(-video_size // MAX_CHUNK_BYTES)  # ceil
+        chunk_size = video_size // count
 
     total = video_size // chunk_size
     if total < 1:

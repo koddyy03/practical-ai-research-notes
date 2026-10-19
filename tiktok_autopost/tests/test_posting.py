@@ -40,20 +40,30 @@ def test_mid_file_is_single_chunk():
     assert plan.ranges[-1][1] == size - 1
 
 
-def test_large_file_last_chunk_absorbs_remainder():
+def test_large_file_is_split_evenly_not_padded_onto_one_chunk():
+    """64MB固定だと127MBが1チャンク宣言になり TikTok に弾かれる。均等割りすること。"""
     size = 200 * MB
     plan = tiktok_api.plan_chunks(size)
-    # floor(200/64) = 3
-    assert plan.total_chunk_count == 3, plan.total_chunk_count
-    assert plan.chunk_size == 64 * MB
-    # 範囲が隙間なく連続し、全体を覆う
+    # 64MB に収まる最小個数 = ceil(200/64) = 4
+    assert plan.total_chunk_count == 4, plan.total_chunk_count
+    assert plan.chunk_size == 50 * MB
     assert plan.ranges[0][0] == 0
     assert plan.ranges[-1][1] == size - 1
     for (_, prev_end), (next_start, _) in zip(plan.ranges, plan.ranges[1:]):
         assert next_start == prev_end + 1, plan.ranges
-    final_len = plan.ranges[-1][1] - plan.ranges[-1][0] + 1
-    assert final_len == 72 * MB, final_len
-    assert final_len <= tiktok_api.MAX_FINAL_CHUNK_BYTES
+    lengths = [e - s + 1 for s, e in plan.ranges]
+    assert all(l <= tiktok_api.MAX_CHUNK_BYTES for l in lengths), lengths
+
+
+def test_the_file_that_tiktok_rejected():
+    """実際に invalid_params を返した 127,083,228 バイトが通る形になること。"""
+    plan = tiktok_api.plan_chunks(127083228)
+    assert plan.total_chunk_count == 2, plan.total_chunk_count
+    lengths = [e - s + 1 for s, e in plan.ranges]
+    assert sum(lengths) == 127083228
+    assert all(l <= tiktok_api.MAX_CHUNK_BYTES for l in lengths), lengths
+    # 宣言した chunk_size と実際に送る長さが食い違わないこと(これが失敗原因だった)
+    assert lengths[0] == plan.chunk_size
 
 
 def test_exact_multiple_has_even_chunks():
@@ -62,6 +72,17 @@ def test_exact_multiple_has_even_chunks():
     assert plan.total_chunk_count == 16, plan.total_chunk_count
     lengths = {end - start + 1 for start, end in plan.ranges}
     assert lengths == {64 * MB}, lengths
+
+
+def test_every_chunk_stays_within_the_per_chunk_limit():
+    """どのサイズでも、宣言 chunk_size と実際の長さが一致し上限内に収まること。"""
+    for size in (5 * MB, 64 * MB, 64 * MB + 1, 127083228, 300 * MB, 1024 * MB):
+        plan = tiktok_api.plan_chunks(size)
+        lengths = [e - s + 1 for s, e in plan.ranges]
+        assert sum(lengths) == size, (size, sum(lengths))
+        assert all(l <= tiktok_api.MAX_CHUNK_BYTES for l in lengths), (size, lengths)
+        assert lengths[0] == plan.chunk_size, (size, lengths[0], plan.chunk_size)
+        assert plan.total_chunk_count == len(plan.ranges)
 
 
 def test_ranges_cover_every_byte():
