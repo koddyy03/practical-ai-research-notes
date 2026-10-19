@@ -406,6 +406,18 @@ def test_save_keeps_credentials_in_the_same_file():
         assert tiktok_api.load_credentials(store.raw()) == ("ck", "cs")
 
 
+def test_token_file_with_bom_is_readable():
+    """Driveやエディタ経由だとBOMが付くことがある。それで落ちないこと。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "creds.json"
+        body = json.dumps({"client_key": "ck", "client_secret": "cs",
+                           "refresh_token": "rt"})
+        path.write_bytes(b"\xef\xbb\xbf" + body.encode("utf-8"))
+        store = tiktok_api.TokenStore(path)
+        assert store.load().refresh_token == "rt"
+        assert tiktok_api.load_credentials(store.raw()) == ("ck", "cs")
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

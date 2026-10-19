@@ -175,7 +175,7 @@ class TokenStore:
                 # アクセストークンは持たないので、必ず refresh が走る
                 return TokenState(refresh_token=seed)
             return TokenState()
-        with open(self.path, encoding="utf-8") as fh:
+        with open(self.path, encoding="utf-8-sig") as fh:
             raw = json.load(fh)
         self._raw = raw
         return parse_token_file(raw)
@@ -184,7 +184,7 @@ class TokenStore:
         """ファイルの生の中身。client_key/client_secret を読むのに使う。"""
         if not self.path.exists():
             return {}
-        with open(self.path, encoding="utf-8") as fh:
+        with open(self.path, encoding="utf-8-sig") as fh:
             return json.load(fh)
 
     def save(self, state: TokenState) -> None:
