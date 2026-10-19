@@ -77,13 +77,27 @@ def _ffprobe(path: Path) -> dict:
     ]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    except FileNotFoundError as exc:
-        raise VideoCheckError("ffprobe が見つからない") from exc
+    except FileNotFoundError:
+        # ffmpeg 一式が入っていない実行環境がある。そこでゲートごと落ちると
+        # 「横動画を投稿しない」という必須要件が効かなくなるので、
+        # 標準ライブラリだけの MP4 パーサで同じ事実を取りにいく。
+        return _fallback_probe(path)
     except subprocess.TimeoutExpired as exc:
         raise VideoCheckError("ffprobe がタイムアウトした") from exc
     if out.returncode != 0:
         raise VideoCheckError(f"ffprobe 失敗: {out.stderr.strip()[:400]}")
     return json.loads(out.stdout)
+
+
+def _fallback_probe(path: Path) -> dict:
+    from . import mp4_probe
+
+    try:
+        return mp4_probe.probe_mp4(path)
+    except Exception as exc:  # noqa: BLE001 - 判定不能として一本化する
+        raise VideoCheckError(
+            f"ffprobe が無く、MP4 として読むこともできない: {exc}"
+        ) from exc
 
 
 def _parse_rotation(stream: dict) -> int:
