@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -90,11 +91,53 @@ class TokenState:
         }
 
 
+# 他実装 (デスクトップ側の .tiktok_token.json 等) が使う別名も読む。
+# 初回認可を別の環境でやった場合でも、そのファイルをそのまま渡せるようにする。
+_REFRESH_KEYS = ("refresh_token", "refreshToken", "refresh")
+_ACCESS_KEYS = ("access_token", "accessToken")
+_EXPIRES_AT_KEYS = ("access_expires_at", "expires_at", "accessExpiresAt")
+_EXPIRES_IN_KEYS = ("expires_in", "expiresIn")
+
+
+def _first(raw: dict, keys: tuple[str, ...], default=""):
+    for k in keys:
+        if raw.get(k) not in (None, ""):
+            return raw[k]
+    return default
+
+
+def parse_token_file(raw: dict) -> TokenState:
+    """トークンJSONを TokenState にする。キー名の揺れを吸収する。
+
+    access_expires_at(絶対時刻)が無く expires_in(相対秒)しか無い形式も
+    受け付けるが、その場合は発行時刻が不明なので期限切れ扱いにして
+    必ず refresh を走らせる。
+    """
+    expires_at = _first(raw, _EXPIRES_AT_KEYS, 0)
+    try:
+        expires_at = float(expires_at)
+    except (TypeError, ValueError):
+        expires_at = 0.0
+    if not expires_at and _first(raw, _EXPIRES_IN_KEYS, ""):
+        # 相対秒しか無い → いつ発行されたか分からないので使い回さない
+        expires_at = 0.0
+    return TokenState(
+        access_token=str(_first(raw, _ACCESS_KEYS, "")),
+        refresh_token=str(_first(raw, _REFRESH_KEYS, "")),
+        access_expires_at=expires_at,
+        open_id=str(_first(raw, ("open_id", "openId"), "")),
+        scope=str(_first(raw, ("scope", "scopes"), "")),
+    )
+
+
 class TokenStore:
     """JSON ファイル 1 枚でトークンを持ち回す。
 
     このコンテナは使い捨てなので、呼び出し側がこのファイルを
     Google Drive 等の永続先と同期させる責任を持つ。
+
+    ファイルが無い場合は環境変数 TIKTOK_REFRESH_TOKEN から起動できる
+    (別環境で初回認可を済ませた場合の受け渡し経路)。
     """
 
     def __init__(self, path: Path):
@@ -102,16 +145,15 @@ class TokenStore:
 
     def load(self) -> TokenState:
         if not self.path.exists():
+            seed = os.environ.get("TIKTOK_REFRESH_TOKEN", "").strip()
+            if seed:
+                logger.info("seeding token state from TIKTOK_REFRESH_TOKEN")
+                # アクセストークンは持たないので、必ず refresh が走る
+                return TokenState(refresh_token=seed)
             return TokenState()
         with open(self.path, encoding="utf-8") as fh:
             raw = json.load(fh)
-        return TokenState(
-            access_token=raw.get("access_token", ""),
-            refresh_token=raw.get("refresh_token", ""),
-            access_expires_at=float(raw.get("access_expires_at") or 0),
-            open_id=raw.get("open_id", ""),
-            scope=raw.get("scope", ""),
-        )
+        return parse_token_file(raw)
 
     def save(self, state: TokenState) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

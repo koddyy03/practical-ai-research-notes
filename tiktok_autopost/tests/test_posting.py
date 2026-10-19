@@ -278,6 +278,65 @@ def test_config_is_loadable_and_portrait_required():
     json.dumps(RULES)  # シリアライズできる
 
 
+# ---------------------------------------------------------------- 別環境からの受け渡し
+
+def test_env_var_seeds_token_when_file_missing():
+    """別環境で初回認可した場合、環境変数だけで起動できること。"""
+    import os
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "absent.json"
+        os.environ["TIKTOK_REFRESH_TOKEN"] = "seeded-rt"
+        try:
+            state = tiktok_api.TokenStore(path).load()
+        finally:
+            del os.environ["TIKTOK_REFRESH_TOKEN"]
+        assert state.refresh_token == "seeded-rt"
+        # アクセストークンは無いので必ず refresh が走る
+        assert not state.access_token_valid
+
+
+def test_file_wins_over_env_var():
+    """ファイルがあれば環境変数は使わない(ローテーション後の値を失わないため)。"""
+    import os
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "token.json"
+        store = tiktok_api.TokenStore(path)
+        store.save(tiktok_api.TokenState(access_token="a", refresh_token="from-file",
+                                         access_expires_at=time.time() + 3600))
+        os.environ["TIKTOK_REFRESH_TOKEN"] = "from-env"
+        try:
+            assert store.load().refresh_token == "from-file"
+        finally:
+            del os.environ["TIKTOK_REFRESH_TOKEN"]
+
+
+def test_parses_camelcase_token_file():
+    """他実装が書いた camelCase のトークンJSONも読めること。"""
+    state = tiktok_api.parse_token_file({
+        "accessToken": "at", "refreshToken": "rt", "openId": "oid", "scopes": "video.publish",
+    })
+    assert state.access_token == "at"
+    assert state.refresh_token == "rt"
+    assert state.open_id == "oid"
+
+
+def test_expires_in_only_is_treated_as_expired():
+    """相対秒しか無い形式は発行時刻が不明なので使い回さない。"""
+    state = tiktok_api.parse_token_file({
+        "access_token": "at", "refresh_token": "rt", "expires_in": 86400,
+    })
+    assert state.refresh_token == "rt"
+    assert not state.access_token_valid, "発行時刻不明のアクセストークンを有効扱いしてはいけない"
+
+
+def test_absolute_expiry_is_honoured():
+    state = tiktok_api.parse_token_file({
+        "access_token": "at", "refresh_token": "rt",
+        "access_expires_at": time.time() + 3600,
+    })
+    assert state.access_token_valid
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
