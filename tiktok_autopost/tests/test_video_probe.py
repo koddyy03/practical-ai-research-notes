@@ -191,7 +191,8 @@ def test_short_side_below_360_rejected():
 
 
 def test_oversize_file_rejected():
-    result = _check(_probe_json(width=1080, height=1920, size=str(2 * 1024**3)))
+    """上限は TikTok の実際の制限である 4GB。"""
+    result = _check(_probe_json(width=1080, height=1920, size=str(5 * 1024**3)))
     assert not result.ok
     assert any("サイズ" in r for r in result.rejections), result.rejections
 
@@ -223,6 +224,28 @@ def test_zero_resolution_raises():
             assert "解像度" in str(exc)
             return
     raise AssertionError("解像度 0 は例外にすべき")
+
+
+def test_resolution_above_4096_is_rejected():
+    """TikTok は縦横とも 4096px まで。8K 素材をそのまま通さないこと。"""
+    result = _check(_probe_json(width=4320, height=7680, fps="60/1",
+                                duration="76.5", size="1308019655"))
+    assert not result.ok
+    assert any("長辺" in r for r in result.rejections), result.rejections
+
+
+def test_4k_vertical_still_passes():
+    """4096px ちょうど以下は通す。実際に投稿できた 2160x3840 が落ちないこと。"""
+    result = _check(_probe_json(width=2160, height=3840, fps="30/1",
+                                duration="56.1", size="246261110"))
+    assert result.ok, result.rejections
+
+
+def test_file_between_1gb_and_4gb_passes():
+    """上限は 4GB。1GB 超で落としていた以前の設定に戻らないこと。"""
+    result = _check(_probe_json(width=1080, height=1920,
+                                size=str(2 * 1024 ** 3)))
+    assert result.ok, result.rejections
 
 
 def test_require_portrait_can_be_turned_off_in_config():

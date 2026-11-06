@@ -191,6 +191,12 @@ def check(path: Path, config: dict | None = None) -> CheckResult:
     if min(facts.width, facts.height) < min_side:
         bad.append(f"短辺が {min_side}px 未満 ({facts.width}x{facts.height})")
 
+    # TikTok は縦横とも 4096px までしか受け付けない。8K 素材がそのまま
+    # 上がってくることがあるので、長辺にも上限を敷く。
+    max_side = int(config.get("max_side_px", 4096))
+    if max(facts.width, facts.height) > max_side:
+        bad.append(f"長辺が {max_side}px 超過 ({facts.width}x{facts.height})")
+
     lo = float(config.get("min_duration_sec", 3))
     hi = float(config.get("max_duration_sec", 600))
     if facts.duration_sec <= 0:

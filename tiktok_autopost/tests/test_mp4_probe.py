@@ -16,6 +16,12 @@ from pathlib import Path
 
 from tiktok_autopost import mp4_probe, video_check
 
+# この一式はフォールバック経路そのものを検証する。実機に ffprobe が
+# あるかどうかでテスト対象が変わってしまわないよう、ここで明示的に
+# ffprobe を迂回させる (合成した MP4 には実データが無く、本物の
+# ffprobe では読めないため)。
+video_check._ffprobe = video_check._fallback_probe
+
 RULES = video_check.load_config()
 
 IDENTITY = (0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000)
