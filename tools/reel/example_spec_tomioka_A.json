@@ -1,5 +1,5 @@
 {
- "name": "tomioka_reel_A_v8",
+ "name": "tomioka_reel_A_v11",
  "fps": 30,
  "audio": "keep",
  "fade_out": 0.7,
@@ -104,5 +104,16 @@
    "en": "So we're taking it global. Again.",
    "ja": "もう一度、世界へ"
   }
- ]
+ ],
+ "music_bed": {
+  "src": "src/v2_history.mp4",
+  "intro_in": 10.5,
+  "intro_len": 3.4,
+  "in": 0.5,
+  "len": 10.0,
+  "v_hi": 0.95,
+  "v_lo": 0.14,
+  "duck_at": 2.9,
+  "duck_len": 1.0
+ }
 }

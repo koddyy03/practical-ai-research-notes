@@ -191,6 +191,38 @@ def build(spec_path):
              "-c:v","libx264","-preset","medium","-crf","18","-pix_fmt","yuv420p",
              "-c:a","aac","-b:a","160k","-movflags","+faststart",tmp])
         os.replace(tmp,out)
+    mb=spec.get("music_bed")
+    if mb:
+        import subprocess as sp
+        total=float(sp.run(["ffprobe","-v","error","-show_entries","format=duration","-of","csv=p=0",out],capture_output=True,text=True).stdout.strip())
+        hi=mb.get("v_hi",0.55); lo=mb.get("v_lo",0.12); da=mb.get("duck_at",3.0); dr=mb.get("duck_len",1.2)
+        fst=round(total-1.6,2)
+        vol=f"if(lt(t,{da}),{hi},if(lt(t,{da+dr}),{hi}-({hi}-{lo})/{dr}*(t-{da}),{lo}))"
+        tmp=out.replace(".mp4","_mix.mp4")
+        bed=f"work/{name}_bed.wav"
+        if mb.get("intro_in") is not None:
+            sw=f"work/{name}_sw.wav"; am=f"work/{name}_am.wav"
+            il=mb.get("intro_len",3.4); al=mb.get("len",10.0)
+            run(["ffmpeg","-nostdin","-v","error","-y","-ss",str(mb["intro_in"]),"-t",str(il),
+                 "-i",mb["src"],"-vn","-c:a","pcm_s16le","-ar","48000","-ac","2",sw])
+            run(["ffmpeg","-nostdin","-v","error","-y","-ss",str(mb["in"]),"-t",str(al),
+                 "-i",mb["src"],"-vn","-c:a","pcm_s16le","-ar","48000","-ac","2",am])
+            rep=int((total-il)/al)+2
+            ins=["-i",sw]+["-i",am]*rep
+            streams="".join(f"[{k}:a]" for k in range(rep+1))
+            run(["ffmpeg","-nostdin","-v","error","-y"]+ins+["-filter_complex",
+                 f"{streams}concat=n={rep+1}:v=0:a=1[b]","-map","[b]","-t",str(total),
+                 "-c:a","pcm_s16le",bed])
+        else:
+            run(["ffmpeg","-nostdin","-v","error","-y","-ss",str(mb["in"]),"-t",str(mb.get("len",12.0)),
+                 "-i",mb["src"],"-vn","-c:a","pcm_s16le","-ar","48000","-ac","2",bed])
+        run(["ffmpeg","-nostdin","-v","error","-y","-i",out,
+             "-stream_loop","-1","-t",str(total),"-i",bed,
+             "-filter_complex",
+             f"[1:a]volume='{vol}':eval=frame,afade=t=out:st={fst}:d=1.6[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]",
+             "-map","0:v","-map","[a]","-c:v","copy",
+             "-c:a","aac","-b:a","160k","-ar","48000","-movflags","+faststart",tmp])
+        os.replace(tmp,out)
     print("BUILT",out)
 
 if __name__=="__main__":
