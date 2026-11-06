@@ -27,7 +27,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import tiktok_api, video_check
+from . import tiktok_api, transcode, video_check
 from .caption import CaptionValidationError, check_post
 from .caption import load_config as load_caption_config
 
@@ -44,8 +44,21 @@ def _mime_for(path: Path) -> str:
     return MIME_BY_SUFFIX.get(path.suffix.lower(), "video/mp4")
 
 
-def run_gates(video: Path, caption: str, first_comment: str, rules: dict) -> dict:
-    """動画とテキストの両方を検証する。落ちたら GateFailure。"""
+def run_gates(
+    video: Path,
+    caption: str,
+    first_comment: str,
+    rules: dict,
+    *,
+    allow_transcode: bool = True,
+    workdir: Path | None = None,
+) -> dict:
+    """動画とテキストの両方を検証する。落ちたら GateFailure。
+
+    動画がゲートを落ちても、再エンコードで直せる理由 (解像度/fps/容量) だけ
+    なら自動で変換し、変換後のパスを "video_path" で返す。横動画と尺超過は
+    変換せず GateFailure にする。
+    """
     if not video.exists():
         raise GateFailure(f"動画ファイルが無い: {video}")
     if video.suffix.lower() not in MIME_BY_SUFFIX:
@@ -55,15 +68,36 @@ def run_gates(video: Path, caption: str, first_comment: str, rules: dict) -> dic
         result = video_check.check(video, rules)
     except video_check.VideoCheckError as exc:
         raise GateFailure(f"動画を解析できない: {exc}") from exc
+
+    plan = None
+    posted_path = video
     if not result.ok:
-        raise GateFailure("動画ゲート却下: " + "; ".join(result.rejections))
+        # 解像度/fps/容量だけが理由なら、同じ絵のまま再エンコードして通す。
+        # 横動画と尺超過はここで GateFailure になる (transcode 側が弾く)。
+        if not (allow_transcode and rules.get("transcode_enabled", True)):
+            raise GateFailure("動画ゲート却下: " + "; ".join(result.rejections))
+        logger.info("gate rejected %s — trying transcode: %s", video.name, result.rejections)
+        try:
+            posted_path, result, plan = transcode.ensure_postable(
+                video, rules, workdir=workdir
+            )
+        except (video_check.VideoCheckError, transcode.TranscodeError) as exc:
+            raise GateFailure(
+                "動画ゲート却下 (" + "; ".join(result.rejections) + f") / 変換も不可: {exc}"
+            ) from exc
 
     try:
         post = check_post(caption, first_comment, load_caption_config())
     except CaptionValidationError as exc:
         raise GateFailure(f"キャプション検証違反: {exc}") from exc
 
-    return {"video": result.facts.as_dict(), "post": post.as_dict()}
+    return {
+        "video": result.facts.as_dict(),
+        "post": post.as_dict(),
+        "video_path": str(posted_path),
+        "transcoded": plan is not None,
+        "transcode_plan": plan.as_dict() if plan else None,
+    }
 
 
 def publish(
@@ -146,12 +180,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--token-state", type=Path, default=Path("token_state.json"))
     parser.add_argument("--config", type=Path, default=video_check.CONFIG_PATH)
     parser.add_argument("--dry-run", action="store_true", help="ゲートだけ通して API は叩かない")
+    parser.add_argument(
+        "--no-transcode", action="store_true",
+        help="ゲート落ちしても再エンコードを試さない (従来どおり即スキップ)",
+    )
+    parser.add_argument("--workdir", type=Path, default=None, help="変換後ファイルの出力先")
     args = parser.parse_args(argv)
 
     rules = video_check.load_config(args.config)
 
     try:
-        gated = run_gates(args.video, args.caption, args.first_comment, rules)
+        gated = run_gates(
+            args.video, args.caption, args.first_comment, rules,
+            allow_transcode=not args.no_transcode,
+            workdir=args.workdir,
+        )
     except GateFailure as exc:
         logger.error("DO NOT POST — %s", exc)
         print(json.dumps({"ok": False, "stage": "gate", "error": str(exc)}, ensure_ascii=False, indent=2))
@@ -164,7 +207,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        result = publish(args.video, full_caption, token_state_path=args.token_state, rules=rules)
+        result = publish(
+            Path(gated["video_path"]), full_caption,
+            token_state_path=args.token_state, rules=rules,
+        )
     except tiktok_api.TikTokAPIError as exc:
         logger.error("投稿に失敗: %s", exc)
         print(json.dumps(

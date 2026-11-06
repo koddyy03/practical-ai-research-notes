@@ -10,6 +10,12 @@
   "max_fps": 60,
   "max_file_bytes": 4294967296,
 
+  "_transcode_comment": "ゲート落ちのうち解像度/fps/容量だけが理由のものを自動で再エンコードする設定。横動画と尺超過は対象外。",
+  "transcode_enabled": true,
+  "transcode_target_long_side_px": 1920,
+  "transcode_target_fps": 30,
+  "transcode_crf": 20,
+
   "privacy_level": "PUBLIC_TO_EVERYONE",
   "disable_comment": false,
   "disable_duet": false,

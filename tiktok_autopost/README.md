@@ -15,9 +15,10 @@
 | `video_check.py` | 投稿前の動画ゲート。ffprobe で実寸を見て縦型以外を落とす。回転メタデータを考慮する |
 | `tiktok_api.py` | TikTok Content Posting API クライアント (Direct Post / FILE_UPLOAD)。標準ライブラリのみ |
 | `auth_setup.py` | 初回 OAuth。人間が踏むのはここ1回だけ |
-| `post_video.py` | 端から端まで: ゲート → キャプション検証 → 投稿 → 完了待ち |
+| `transcode.py` | ゲート落ちのうち**解像度/fps/容量だけ**が理由のものを再エンコードして通す。横動画と尺超過は変換しない |
+| `post_video.py` | 端から端まで: ゲート → (必要なら変換) → キャプション検証 → 投稿 → 完了待ち |
 | `config/caption_rules.json` | 禁止ワード・禁止タグ・固定ハッシュタグ・上限値 |
-| `config/post_rules.json` | 縦型必須・尺・fps・サイズ・公開範囲・ポーリング設定 |
+| `config/post_rules.json` | 縦型必須・尺・fps・サイズ・自動変換・公開範囲・ポーリング設定 |
 
 設定値は**どちらも JSON 側だけ編集して更新する**。コードは触らない。
 
@@ -75,12 +76,50 @@ python3 -m tiktok_autopost.caption --validate-only \
 - **`open.tiktokapis.com` はこの環境のネットワークポリシーでブロックされている。**
   現状はサンドボックス経由。許可リストに入れれば直接叩ける。
 
+## 自動変換 (サイズ・解像度)
+
+Drive には 8K60 HEVC のような「中身は問題ないが TikTok が受け取れない」
+素材が混ざる。これを人が毎回手で変換していると投稿が止まるので、
+**再エンコードで直せる却下理由だけ**自動で潰す。
+
+| 却下理由 | 挙動 |
+|---|---|
+| 長辺が 4096px 超過 | 長辺 1920px まで縮小 (アスペクト比は維持) |
+| 短辺が 360px 未満 | 短辺 360px まで拡大 |
+| fps が 23-60 の範囲外 | 30fps に合わせる |
+| ファイルサイズ超過 | CRF で再エンコード → まだ超えるならビットレート指定で詰め直す (最大3回) |
+| **縦型ではない** | **変換しない。** クロップやパディングで縦枠に入れれば「投稿できる」状態にはなるが、「横動画は投稿しない」は画角の要件であってファイル形式の話ではない |
+| **尺が範囲外** | **変換しない。** 10分超を切るのは編集判断 |
+| 上記以外の未知の理由 | **変換しない。** 黙って投稿するより止めて人に見せる |
+
+直せない理由が 1 つでも混ざっていたら、直せる理由が同時にあっても
+**ffmpeg は一度も走らない**。元ファイルは書き換えず、`<元の名前>.tiktok.mp4`
+を別に書き出す。
+
+```bash
+# 変換だけ試す
+python3 -m tiktok_autopost.transcode /tmp/8k.mp4 --workdir /tmp/out
+
+# 投稿フローに任せる (ゲート落ちしたら自動で変換される)
+python3 -m tiktok_autopost.post_video --video /tmp/8k.mp4 \
+    --caption "..." --first-comment "..." --workdir /tmp/out
+
+# 自動変換を切る
+python3 -m tiktok_autopost.post_video ... --no-transcode
+# もしくは config/post_rules.json の "transcode_enabled": false
+```
+
+ffmpeg が無い環境では変換できないので、その旨を理由に入れて却下する
+(無言で素材を投稿してしまうことはない)。
+
 ## テスト
 
 ```bash
 python3 -m tiktok_autopost.tests.test_caption      # 17件 キャプション規則
-python3 -m tiktok_autopost.tests.test_posting      # 20件 チャンク分割・トークン保存・ゲート
-python3 -m tiktok_autopost.tests.test_video_probe  # 25件 向き判定・回転補正・fps/尺/サイズ
+python3 -m tiktok_autopost.tests.test_posting      # 33件 チャンク分割・トークン保存・ゲート
+python3 -m tiktok_autopost.tests.test_video_probe  # 28件 向き判定・回転補正・fps/尺/サイズ
+python3 -m tiktok_autopost.tests.test_mp4_probe    # 19件 ffprobe 無し環境の MP4 パーサ
+python3 -m tiktok_autopost.tests.test_transcode    # 20件 何を変換し、何を変換しないか
 ```
 
 `test_video_probe` は ffprobe の JSON を差し込むので ffprobe 無しでも走る。
