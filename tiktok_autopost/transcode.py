@@ -16,7 +16,10 @@ Drive に上がってくる素材は 8K60 HEVC のような「TikTok が受け�
 合わせれば通るもの」に限る。
 
 使い方 (CLI):
-    python3 -m tiktok_autopost.transcode /path/in.mp4 --out /path/out.mp4
+    python3 -m tiktok_autopost.transcode /path/in.mp4 --workdir /path/out
+
+    # 変換したらそのまま公開URLに載せる (投稿にそのURLを使う)
+    python3 -m tiktok_autopost.transcode /path/in.mp4 --workdir /path/out --host
 """
 
 from __future__ import annotations
@@ -298,6 +301,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("path", type=Path)
     parser.add_argument("--workdir", type=Path, default=None, help="出力先ディレクトリ")
     parser.add_argument("--config", type=Path, default=video_check.CONFIG_PATH)
+    parser.add_argument(
+        "--host", action="store_true",
+        help="変換した場合、Late(Zernio) の保管に上げて公開URLも返す",
+    )
     args = parser.parse_args(argv)
 
     config = video_check.load_config(args.config)
@@ -307,13 +314,29 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2))
         return 1
 
-    print(json.dumps({
+    payload = {
         "ok": True,
         "path": str(out),
         "transcoded": plan is not None,
         "plan": plan.as_dict() if plan else None,
         "facts": result.facts.as_dict(),
-    }, ensure_ascii=False, indent=2))
+    }
+
+    # 変換した動画は Drive 上に存在しないので、投稿に使える公開URLが必要。
+    # 変換していないなら元の Drive リンクがそのまま使えるので何もしない。
+    if args.host and plan is not None:
+        from . import media_host
+
+        try:
+            hosted = media_host.host(out)
+        except media_host.MediaHostError as exc:
+            payload.update({"ok": False, "error": f"公開URLに載せられない: {exc}"})
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 1
+        payload["public_url"] = hosted.public_url
+        payload["hosted_key"] = hosted.key
+
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 

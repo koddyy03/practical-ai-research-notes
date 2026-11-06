@@ -16,6 +16,7 @@
 | `tiktok_api.py` | TikTok Content Posting API クライアント (Direct Post / FILE_UPLOAD)。標準ライブラリのみ |
 | `auth_setup.py` | 初回 OAuth。人間が踏むのはここ1回だけ |
 | `transcode.py` | ゲート落ちのうち**解像度/fps/容量だけ**が理由のものを再エンコードして通す。横動画と尺超過は変換しない |
+| `media_host.py` | 変換した動画を Late(Zernio) の保管に上げて公開URLを返す。署名付きURLへの PUT には Authorization を付けない |
 | `post_video.py` | 端から端まで: ゲート → (必要なら変換) → キャプション検証 → 投稿 → 完了待ち |
 | `config/caption_rules.json` | 禁止ワード・禁止タグ・固定ハッシュタグ・上限値 |
 | `config/post_rules.json` | 縦型必須・尺・fps・サイズ・自動変換・公開範囲・ポーリング設定 |
@@ -96,9 +97,39 @@ Drive には 8K60 HEVC のような「中身は問題ないが TikTok が受け�
 **ffmpeg は一度も走らない**。元ファイルは書き換えず、`<元の名前>.tiktok.mp4`
 を別に書き出す。
 
+### 変換した動画をどこに置くか
+
+変換結果は Drive 上に存在しないので、Late に渡す公開URLをどこかに作る必要が
+ある。これは **Late(Zernio) 自身のメディア保管**を使う(`media_host.py`)。
+
+当初これを Higgsfield の CDN でやっていたが、Higgsfield が落ちると
+**変換が必要な動画は投稿そのものができなくなる**。投稿経路の単一障害点を、
+投稿に無関係なサービスに置いていた。Late 自身に署名付きアップロードが
+あるので、保管先と投稿先を同じサービスに寄せた。これで Higgsfield は
+「内容把握(キャプションの材料)」だけの依存に下がり、そこが落ちても
+キャプションを人が書けば投稿はできる。
+
+手順(2026-11-06に実地で確認):
+
+```
+POST /api/v1/media {filename, contentType}
+    -> {uploadUrl(署名付きPUT, 1時間有効), publicUrl, key, type}
+PUT uploadUrl   本文=動画。**Authorization を付けてはいけない**(署名が壊れる)
+HEAD publicUrl  取得できてサイズが合うことを必ず確認する
+```
+
+最後の確認を省くと、404 を返すURLを Late に渡して投稿が静かに失敗する。
+実測で 115MB が約7秒。
+
 ```bash
 # 変換だけ試す
 python3 -m tiktok_autopost.transcode /tmp/8k.mp4 --workdir /tmp/out
+
+# 変換して公開URLまで作る (投稿にはこの public_url を使う)
+python3 -m tiktok_autopost.transcode /tmp/8k.mp4 --workdir /tmp/out --host
+
+# 既にあるファイルを公開URLに載せるだけ
+python3 -m tiktok_autopost.media_host /tmp/out/8k.tiktok.mp4
 
 # 投稿フローに任せる (ゲート落ちしたら自動で変換される)
 python3 -m tiktok_autopost.post_video --video /tmp/8k.mp4 \
@@ -120,6 +151,7 @@ python3 -m tiktok_autopost.tests.test_posting      # 33件 チャンク分割・
 python3 -m tiktok_autopost.tests.test_video_probe  # 28件 向き判定・回転補正・fps/尺/サイズ
 python3 -m tiktok_autopost.tests.test_mp4_probe    # 19件 ffprobe 無し環境の MP4 パーサ
 python3 -m tiktok_autopost.tests.test_transcode    # 20件 何を変換し、何を変換しないか
+python3 -m tiktok_autopost.tests.test_media_host   # 13件 署名付きアップロードの手順
 ```
 
 `test_video_probe` は ffprobe の JSON を差し込むので ffprobe 無しでも走る。
