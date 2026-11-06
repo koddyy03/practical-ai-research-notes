@@ -1,0 +1,108 @@
+{
+ "name": "tomioka_reel_A_v8",
+ "fps": 30,
+ "audio": "keep",
+ "fade_out": 0.7,
+ "segments": [
+  {
+   "src": "src/v2_history.mp4",
+   "in": 4.2,
+   "out": 4.95,
+   "crop_x": 960,
+   "mute": true
+  },
+  {
+   "src": "src/v2_history.mp4",
+   "in": 12.4,
+   "out": 13.15,
+   "crop_x": 960,
+   "mute": true
+  },
+  {
+   "src": "src/v2_history.mp4",
+   "in": 8.4,
+   "out": 9.15,
+   "crop_x": 960,
+   "mute": true
+  },
+  {
+   "src": "src/v2_history.mp4",
+   "in": 16.4,
+   "out": 17.15,
+   "crop_x": 960,
+   "mute": true
+  },
+  {
+   "src": "src/v1_beauty.mp4",
+   "in": 92.0,
+   "out": 105.3,
+   "crop_x": 960
+  },
+  {
+   "src": "src/v3_origins.mp4",
+   "in": 291.5,
+   "out": 299.4,
+   "vsrc": "src/v2_history.mp4",
+   "vin": 24.0,
+   "crop_x": 960
+  },
+  {
+   "src": "src/v3_origins.mp4",
+   "in": 312.7,
+   "out": 317.5,
+   "vsrc": "src/v1_beauty.mp4",
+   "vin": 107.5,
+   "crop_x": 960
+  },
+  {
+   "src": "src/v1_beauty.mp4",
+   "in": 266.5,
+   "out": 278.3,
+   "crop_x": 1150
+  }
+ ],
+ "hook": {
+  "en": "Japan made 80% of the world's silk.",
+  "ja": "日本のシルクが世界を支えていた",
+  "dur": 5.5,
+  "loc": "Tomioka Silk Mill · 富岡製糸場"
+ },
+ "cues": [
+  {
+   "s": 3.3,
+   "e": 10.7,
+   "en": "Back then, silk was 40% of Japan's entire exports.",
+   "ja": "シルクは日本の総輸出の4割"
+  },
+  {
+   "s": 10.7,
+   "e": 16.3,
+   "en": "And this is where it all started.",
+   "ja": "その原点がここ"
+  },
+  {
+   "s": 16.6,
+   "e": 24.2,
+   "en": "When the mill closed, one family business protected it — for 18 years.",
+   "ja": "閉鎖後も片倉が18年間守り続けた"
+  },
+  {
+   "s": 24.4,
+   "e": 29.0,
+   "en": "Zero income. They still paid the taxes and salaries.",
+   "ja": "収入ゼロでも税金も給料も自費で"
+  },
+  {
+   "s": 29.3,
+   "e": 35.6,
+   "en": "Nobody knows Japanese silk overseas — just like back then.",
+   "ja": "当時と同じ 世界はまだ知らない"
+  },
+  {
+   "s": 35.6,
+   "e": 41.3,
+   "en": "So we're taking it global. Again.",
+   "ja": "もう一度、世界へ"
+  }
+ ]
+}
