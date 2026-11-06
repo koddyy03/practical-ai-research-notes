@@ -5,7 +5,7 @@
 
 ## 🥇 即リール化できる優先クラスタ
 
-### 1. SF series — 59本 / 2.3GB / 2026-08撮影(IMG_66xx〜67xx + sf24_final_v7.mp4)
+### 1. SF series — 59本 / 2.3GB / 2026-08撮影 ✅投稿済み(2026-11時点)
 サンフランシスコ出張・活動の生素材群。編集済みのsf24_finalもあり。
 → **「日本人founderがSFで◯◯した」シリーズ(2〜3本)**。Tomiokaリールと対になる「現在のUS挑戦」軸。英語キャプションで "Day in SF as a Japanese founder" 形式が刺さる。
 
@@ -56,7 +56,7 @@ US日系スーパーでの店頭素材+30秒YouTube尺あり。
 - grandma素材はこのスキャン外(ローカル`grandmom <> kodai.MOV` 31分、未使用山場5箇所)
 
 ## 推奨アクション(優先順)
-1. **SF series**で「US挑戦」リール2本 → Tomioka 3本と交互に投稿(founder:heritage = 1:1バランス)
+1. ~~SF series~~ ✅投稿済み
 2. **Kodai origins**で「なぜシルクか」1本(Tomioka Aの続編として片倉=株主の文脈に接続)
 3. **TikTok's + HowTo群**をSILK US自動投稿パイプラインの初期在庫として投入
 4. GACKT素材は掲載許可の確認後に単発投下
