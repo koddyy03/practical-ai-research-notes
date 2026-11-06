@@ -72,6 +72,52 @@ def cue_png(en, ja, path):
     img.save(path)
 
 
+
+def track_face_expr(video, t_in, t_out, step=0.5):
+    """Sample frames, detect largest face, return piecewise-linear ffmpeg expr for crop x."""
+    import cv2, subprocess, numpy as np
+    casc=cv2.CascadeClassifier(cv2.data.haarcascades+"haarcascade_frontalface_default.xml")
+    prof=cv2.CascadeClassifier(cv2.data.haarcascades+"haarcascade_profileface.xml")
+    ts=[]; xs=[]
+    t=t_in
+    while t<t_out+1e-6:
+        p=f"/tmp/trk.jpg"
+        subprocess.run(["ffmpeg","-nostdin","-v","error","-y","-ss",str(round(t,2)),"-i",video,
+                        "-frames:v","1","-vf","scale=640:360",p],check=True)
+        img=cv2.imread(p); g=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+        faces=list(casc.detectMultiScale(g,1.1,4,minSize=(40,40)))
+        if len(faces)==0:
+            faces=list(prof.detectMultiScale(g,1.1,4,minSize=(40,40)))
+        if len(faces)==0:
+            fg=cv2.flip(g,1)
+            ff=list(prof.detectMultiScale(fg,1.1,4,minSize=(40,40)))
+            faces=[(640-(x+w),y,w,h) for x,y,w,h in ff]
+        if faces:
+            x,y,w,h=max(faces,key=lambda f:f[2]*f[3])
+            xs.append((x+w/2)*3.0)  # scale 640->1920
+        else:
+            xs.append(None)
+        ts.append(round(t-t_in,2)); t+=step
+    # fill gaps
+    vals=[v for v in xs if v is not None]
+    if not vals: return None
+    last=vals[0]
+    for i,v in enumerate(xs):
+        if v is None: xs[i]=last
+        else: last=v
+    # backfill head
+    for i in range(len(xs)):
+        if xs[i] is None: xs[i]=vals[0]
+    # smooth (moving average 3)
+    sm=[float(np.mean(xs[max(0,i-1):i+2])) for i in range(len(xs))]
+    keys=[(ts[i], int(max(304,min(1616,sm[i])))-304) for i in range(len(ts))]
+    # piecewise-linear nested if expr
+    expr=str(keys[-1][1])
+    for (t0,x0),(t1,x1) in reversed(list(zip(keys[:-1],keys[1:]))):
+        seg=f"{x0}+({x1}-{x0})*(t-{t0})/({t1-t0})"
+        expr=f"if(lt(t\,{t1})\,{seg}\,{expr})"
+    return expr
+
 def toplabel_png(en, ja, path):
     img=Image.new("RGBA",(W,H),(0,0,0,0)); d=ImageDraw.Draw(img)
     d.rectangle([0,0,1080,470 if ja else 400],fill=(10,10,10,255))
@@ -114,7 +160,11 @@ def build(spec_path):
     seglist=[]
     for i,s in enumerate(spec["segments"]):
         seg=f"work/{name}_seg{i}.mp4"
-        if s.get("crop"):  # explicit [w,h,x,y] zoom crop
+        if s.get("track"):
+            expr=track_face_expr(s.get("vsrc",s["src"]), s.get("vin",s["in"]), s.get("vin",s["in"])+(s["out"]-s["in"]))
+            if expr is None: raise SystemExit("no face found for track segment")
+            vf=f"crop=608:1080:'{expr}':0,scale=1080:1920:flags=lanczos"
+        elif s.get("crop"):  # explicit [w,h,x,y] zoom crop
             cw,ch,xx,yy=s["crop"]
             vf=f"crop={cw}:{ch}:{xx}:{yy},scale=1080:1920:flags=lanczos"
         else:
