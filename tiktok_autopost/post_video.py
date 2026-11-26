@@ -93,6 +93,7 @@ def run_gates(
 
     return {
         "video": result.facts.as_dict(),
+        "warnings": result.warnings,
         "post": post.as_dict(),
         "video_path": str(posted_path),
         "transcoded": plan is not None,

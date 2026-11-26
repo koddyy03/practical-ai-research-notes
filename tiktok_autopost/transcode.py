@@ -319,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         "path": str(out),
         "transcoded": plan is not None,
         "plan": plan.as_dict() if plan else None,
+        "warnings": result.warnings,
         "facts": result.facts.as_dict(),
     }
 

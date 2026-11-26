@@ -35,6 +35,14 @@ class VideoFacts:
     size_bytes: int
     codec: str
     rotation: int
+    # 音声。ffprobe/ffmpeg が無い環境では測れないので None を許す。
+    audio_codec: str | None = None
+    audio_max_dbfs: float | None = None
+    audio_mean_dbfs: float | None = None
+
+    @property
+    def has_audio_track(self) -> bool:
+        return bool(self.audio_codec)
 
     @property
     def is_portrait(self) -> bool:
@@ -50,6 +58,9 @@ class VideoFacts:
             "size_bytes": self.size_bytes,
             "codec": self.codec,
             "rotation": self.rotation,
+            "audio_codec": self.audio_codec,
+            "audio_max_dbfs": self.audio_max_dbfs,
+            "audio_mean_dbfs": self.audio_mean_dbfs,
         }
 
 
@@ -58,9 +69,16 @@ class CheckResult:
     ok: bool
     facts: VideoFacts
     rejections: list[str] = field(default_factory=list)
+    # 投稿は止めないが航大に伝えるべきこと (無音など)。
+    warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
-        return {"ok": self.ok, "rejections": self.rejections, "facts": self.facts.as_dict()}
+        return {
+            "ok": self.ok,
+            "rejections": self.rejections,
+            "warnings": self.warnings,
+            "facts": self.facts.as_dict(),
+        }
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
@@ -131,6 +149,37 @@ def _parse_fps(stream: dict) -> float:
     return 0.0
 
 
+def _measure_loudness(path: Path) -> tuple[float | None, float | None]:
+    """ffmpeg -af volumedetect で max/mean dBFS を測る。
+
+    音声トラックは有るのに中身が実質無音、という素材が実際に混ざる
+    (編集アプリが元音声をミュートして書き出すと -60dB 付近の空トラックになる)。
+    ffmpeg が無い環境では測れないので (None, None) を返し、警告は出さない。
+    """
+    try:
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostdin", "-i", str(path),
+             "-map", "0:a:0", "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=300,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None, None
+    peak = mean = None
+    for line in out.stderr.splitlines():
+        if "max_volume:" in line:
+            peak = _parse_db(line)
+        elif "mean_volume:" in line:
+            mean = _parse_db(line)
+    return peak, mean
+
+
+def _parse_db(line: str) -> float | None:
+    try:
+        return float(line.rsplit(":", 1)[1].strip().removesuffix("dB").strip())
+    except (IndexError, ValueError):
+        return None
+
+
 def probe(path: Path) -> VideoFacts:
     data = _ffprobe(path)
     streams = [s for s in data.get("streams", []) if s.get("codec_type") == "video"]
@@ -165,6 +214,14 @@ def probe(path: Path) -> VideoFacts:
     if size_bytes <= 0:
         size_bytes = path.stat().st_size
 
+    audio = next(
+        (s for s in data.get("streams", []) if s.get("codec_type") == "audio"), None
+    )
+    audio_codec = str(audio.get("codec_name") or "unknown") if audio else None
+    peak_db = mean_db = None
+    if audio is not None:
+        peak_db, mean_db = _measure_loudness(path)
+
     return VideoFacts(
         width=width,
         height=height,
@@ -173,6 +230,9 @@ def probe(path: Path) -> VideoFacts:
         size_bytes=size_bytes,
         codec=str(stream.get("codec_name") or "unknown"),
         rotation=rotation,
+        audio_codec=audio_codec,
+        audio_max_dbfs=peak_db,
+        audio_mean_dbfs=mean_db,
     )
 
 
@@ -217,7 +277,24 @@ def check(path: Path, config: dict | None = None) -> CheckResult:
             f"ファイルサイズが上限超過 ({facts.size_bytes} > {max_bytes} bytes)"
         )
 
-    return CheckResult(ok=not bad, facts=facts, rejections=bad)
+    warn: list[str] = []
+    if config.get("warn_silent_audio", True):
+        peak_floor = float(config.get("silent_audio_max_dbfs", -30.0))
+        mean_floor = float(config.get("silent_audio_mean_dbfs", -45.0))
+        peak, mean = facts.audio_max_dbfs, facts.audio_mean_dbfs
+        if not facts.has_audio_track:
+            warn.append("音声トラックが無い (TikTokでは完全な無音投稿になる)")
+        elif (peak is not None and peak < peak_floor) or (
+            mean is not None and mean < mean_floor
+        ):
+            warn.append(
+                "音声が小さすぎて実質無音 "
+                f"(ピーク {peak:.1f}dBFS / 平均 {mean:.1f}dBFS。"
+                f"目安はピーク {peak_floor:.0f} 平均 {mean_floor:.0f} 以上)。"
+                "書き出し時に元音声がミュートされている可能性が高い"
+            )
+
+    return CheckResult(ok=not bad, facts=facts, rejections=bad, warnings=warn)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -10,6 +10,11 @@
   "max_fps": 60,
   "max_file_bytes": 4294967296,
 
+  "_audio_comment": "無音素材の検出。投稿は止めない(止めてよいのはゲート不合格/内容重複/ブランドPVの3つだけ)。警告として報告してSlack DMに回す。",
+  "warn_silent_audio": true,
+  "silent_audio_max_dbfs": -30.0,
+  "silent_audio_mean_dbfs": -45.0,
+
   "_transcode_comment": "ゲート落ちのうち解像度/fps/容量だけが理由のものを自動で再エンコードする設定。横動画と尺超過は対象外。",
   "transcode_enabled": true,
   "transcode_target_long_side_px": 1920,
