@@ -5,8 +5,23 @@
 切り詰められた素材は音声トラックが実質無音(ピーク -60dBFS 前後)で、30秒超の
 長回しだけ音が生きていた。したがって優先順位は:
 
-  1. 長回し素材から切り出す  -> 本物の街の音がそのまま乗る (clip)
-  2. それが無い無音素材だけ   -> 音を足す                  (mux)
+  1. 長回し素材から切り出す  -> その素材自身の音がそのまま乗る (clip)
+  2. 無音素材は BGM を付ける                                  (mux)
+
+**航大の指示(2026-11-26): 無音の動画は BGM だけにする。**
+**他の動画から音を切り出して流用してはいけない。**
+別撮りの音を当てるのは禁止。`mux` の `bed` に渡してよいのは音楽ファイルだけで、
+他の動画から抜いた音声を渡してはならない(一度その案を出して却下された)。
+BGM の本命は TikTok 側に曲を付けさせる経路(下記)で、`mux` は
+それが使えないときに、ライセンスの通った音楽ファイルで埋める予備手段。
+
+**本命: TikTok Commercial Music Library を使う(焼き込まない)**
+2026-11-26に kodai_global で動作確認済み。Zernio に下記を渡すと、曲は TikTok 側で
+付き、サウンドページも機能する。元音声を 0 にすれば完全に BGM のみになる。
+    tiktokSettings.musicSoundInfo.musicSoundId  = 曲の clip.id
+    tiktokSettings.musicSoundInfo.musicSoundVolume = 50〜60
+    tiktokSettings.videoOriginalSoundVolume     = 0   (BGMだけにする)
+曲一覧: GET /v1/accounts/<accountId>/tiktok/commercial-music?countryCode=US
 
 音を足す場合、ベッドは動画の尺に合わせてループ/カットし、投稿に耐える音量まで
 正規化する。TikTok 側でも正規化されるので狙いは平均 -16dBFS 前後。
@@ -115,8 +130,11 @@ def mux(
 
     - ベッドは動画の尺までループし、末尾でフェードアウトする。
     - `loudnorm` で狙いの音量に正規化するので、素材の音量差を気にしなくてよい。
-    - `keep_original=True` なら元の音を `original_volume` 倍で下に残す。
-      ただし元が無音(= 本来の用途)なら残しても意味が無いので既定は False。
+    - 既定では元音声を残さない。航大の指示「無音の動画は BGM だけにする」に合わせた既定値。
+    - `keep_original=True` は元が無音なら意味が無い。使うのは、元に生きた音が
+      あってその上に音楽を敷きたいと明示的に言われたときだけ。
+    - **`bed` は音楽ファイルであること。** 他の動画から抜いた音声を渡してはいけない
+      (航大の指示。2026-11-26)。
     """
     src_facts = probe(src)
     dur = src_facts["duration_sec"]
